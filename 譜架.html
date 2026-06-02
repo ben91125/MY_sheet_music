@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的多樂器數位樂譜架 (PDF & 圖片雙支援)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f8f9fa;
+            --text-color: #212529;
+            --primary-color: #4a6fa5;
+            --sidebar-width: 320px;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            height: 100vh;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overflow: hidden;
+        }
+
+        /* 左側側邊欄 */
+        #sidebar {
+            width: var(--sidebar-width);
+            background: #ffffff;
+            border-right: 1px solid #dee2e6;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+            flex-shrink: 0;
+            transition: width 0.3s ease;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .sidebar-header h2 {
+            margin: 0 0 10px 0;
+            font-size: 1.2rem;
+            color: var(--primary-color);
+        }
+
+        #search-input {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+        }
+
+        #score-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        #score-list li {
+            padding: 15px 20px;
+            border-bottom: 1px solid #f1f3f5;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        #score-list li:hover { background-color: #e9ecef; }
+        #score-list li.active {
+            background-color: #e8f0fe;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .score-meta {
+            font-size: 0.8rem;
+            color: #6c757d;
+            margin-top: 4px;
+        }
+
+        .badge-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 6px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 6px;
+            font-size: 0.7rem;
+            background-color: #e7f5ff;
+            color: #1c7ed6;
+            border-radius: 3px;
+        }
+        .badge.instrument { background-color: #f3f0ff; color: #6f2dbd; }
+        .badge.format-pdf { background-color: #fff0f6; color: #d6336c; }
+        .badge.format-img { background-color: #e3fafc; color: #0c8599; }
+
+        /* 右側主區域 */
+        #main-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        #toolbar {
+            padding: 10px 20px;
+            background: #ffffff;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-shrink: 0;
+            transition: all 0.3s ease;
+        }
+
+        .btn {
+            padding: 6px 12px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .btn-focus { background: #2b8a3e; }
+
+        /* 工作區佈局 */
+        #workspace {
+            display: flex;
+            flex-grow: 1;
+            overflow: hidden;
+            background: #e9ecef;
+        }
+
+        #viewer-container {
+            flex-grow: 1;
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #1a1a1a; /* 預設護眼黑背景 */
+        }
+
+        /* 畫布與圖片皆採用相同影線與最優自適應比例 */
+        #pdf-canvas, #img-viewer {
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            background: white;
+            max-width: 100%;
+            max-height: 100%;
+            display: none;
+        }
+
+        /* 點擊翻頁熱區 */
+        .page-ctrl-zone {
+            position: absolute;
+            top: 0;
+            height: 100%;
+            width: 30%;
+            cursor: pointer;
+            z-index: 10;
+        }
+        #prev-zone { left: 0; }
+        #next-zone { right: 0; }
+
+        #page-num-indicator {
+            position: absolute;
+            bottom: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.6);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            z-index: 11;
+            pointer-events: none;
+        }
+
+        /* YouTube 側邊欄 */
+        #video-container {
+            width: 420px;
+            background: #212529;
+            border-left: 1px solid #343a40;
+            display: none;
+            flex-shrink: 0;
+            padding: 15px;
+            box-sizing: border-box;
+            color: white;
+            transition: width 0.3s ease;
+        }
+
+        .video-title { margin-bottom: 12px; font-size: 0.95rem; font-weight: bold; }
+        #version-selector { display: flex; gap: 5px; margin-bottom: 12px; flex-wrap: wrap; }
+
+        .version-btn {
+            background: #495057; color: #dee2e6; border: none;
+            padding: 5px 10px; font-size: 0.8rem; border-radius: 3px; cursor: pointer;
+        }
+        .version-btn.active { background: #22b8cf; color: white; font-weight: bold; }
+
+        .video-wrapper {
+            position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;
+            background: #000; border-radius: 4px;
+        }
+        .video-wrapper iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
+
+        /* 專注模式樣式 */
+        body.focus-mode #sidebar { width: 0 !important; overflow: hidden; border: none; }
+        body.focus-mode #video-container { width: 0 !important; padding: 0 !important; overflow: hidden; border: none; }
+        body.focus-mode #toolbar { height: 0; padding: 0; overflow: hidden; border: none; }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <div class="sidebar-header">
+            <h2>我的多樂器樂譜庫</h2>
+            <input type="text" id="search-input" placeholder="搜尋曲名、樂器、作曲家...">
+        </div>
+        <ul id="score-list"></ul>
+    </div>
+
+    <div id="main-content">
+        <div id="toolbar">
+            <button class="btn btn-focus" onclick="toggleFocusMode()">切換專注模式</button>
+            <button class="btn" onclick="prevPage()">上一頁</button>
+            <button class="btn" onclick="nextPage()">下一頁</button>
+            <span id="current-title" style="font-weight: bold; margin-left: auto;">請選擇琴譜</span>
+        </div>
+
+        <div id="workspace">
+            <div id="viewer-container">
+                <div id="prev-zone" class="page-ctrl-zone" onclick="prevPage(); event.stopPropagation();"></div>
+                <div id="next-zone" class="page-ctrl-zone" onclick="nextPage(); event.stopPropagation();"></div>
+                
+                <div style="position:absolute; width:40%; height:100%; z-index:5; cursor:pointer;" onclick="toggleFocusMode()"></div>
+
+                <canvas id="pdf-canvas"></canvas>
+                <img id="img-viewer" alt="琴譜圖片">
+                
+                <div id="page-num-indicator">0 / 0</div>
+            </div>
+
+            <div id="video-container">
+                <div class="video-title">🎬 練習錄影版本</div>
+                <div id="version-selector"></div>
+                <div class="video-wrapper">
+                    <iframe id="youtube-player" src="" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
+        const scoreData = window.scoreData || [];
+        
+        // 核心狀態管理
+        let currentMode = null; // 'PDF' 或 'IMG'
+        let pdfDoc = null;
+        let imgArray = [];
+        let pageNum = 1;
+        let totalPages = 0;
+        let pageRendering = false;
+        let pageNumPending = null;
+        let currentActiveScore = null;
+
+        const canvas = document.getElementById('pdf-canvas');
+        const ctx = canvas.getContext('2d');
+        const imgViewer = document.getElementById('img-viewer');
+        const scoreList = document.getElementById('score-list');
+        const searchInput = document.getElementById('search-input');
+        const currentTitle = document.getElementById('current-title');
+        
+        const videoContainer = document.getElementById('video-container');
+        const versionSelector = document.getElementById('version-selector');
+        const youtubePlayer = document.getElementById('youtube-player');
+        const pageIndicator = document.getElementById('page-num-indicator');
+
+        // 1. 核心分配：根據目前模式渲染畫面
+        function renderCurrentPage() {
+            if (currentMode === 'PDF') {
+                canvas.style.display = 'block';
+                imgViewer.style.display = 'none';
+                renderPDFPage(pageNum);
+            } else if (currentMode === 'IMG') {
+                canvas.style.display = 'none';
+                imgViewer.style.display = 'block';
+                renderIMGPage(pageNum);
+            }
+            pageIndicator.textContent = `${pageNum} / ${totalPages}`;
+        }
+
+        // PDF 渲染邏輯
+        function renderPDFPage(num) {
+            pageRendering = true;
+            pdfDoc.getPage(num).then(page => {
+                const container = document.getElementById('viewer-container');
+                const viewportRaw = page.getViewport({ scale: 1 });
+                const perfectScale = Math.min(container.clientWidth / viewportRaw.width, container.clientHeight / viewportRaw.height);
+
+                const viewport = page.getViewport({ scale: perfectScale });
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                const renderTask = page.render({ canvasContext: ctx, viewport: viewport });
+                renderTask.promise.then(() => {
+                    pageRendering = false;
+                    if (pageNumPending !== null) {
+                        renderPDFPage(pageNumPending);
+                        pageNumPending = null;
+                    }
+                });
+            });
+        }
+
+        // 圖片渲染邏輯
+        function renderIMGPage(num) {
+            // 陣列索引從 0 開始，所以要減 1
+            imgViewer.src = imgArray[num - 1];
+        }
+
+        // 翻頁排程
+        function queueRenderPage(num) {
+            if (currentMode === 'PDF' && pageRendering) {
+                pageNumPending = num;
+            } else {
+                renderCurrentPage();
+            }
+        }
+
+        function prevPage() {
+            if (pageNum <= 1) return;
+            pageNum--;
+            queueRenderPage(pageNum);
+        }
+
+        function nextPage() {
+            if (pageNum >= totalPages) return;
+            pageNum++;
+            queueRenderPage(pageNum);
+        }
+
+        function toggleFocusMode() {
+            if (!currentActiveScore) return;
+            document.body.classList.toggle('focus-mode');
+            // 動態重新計算 PDF 尺寸以利完美填滿
+            setTimeout(() => { if (currentMode === 'PDF' && pdfDoc) renderPDFPage(pageNum); }, 310);
+        }
+
+        // 2. 樂譜列表與格式識別
+        function renderList(data) {
+            scoreList.innerHTML = '';
+            data.forEach(score => {
+                const li = document.createElement('li');
+                
+                // 根據設定欄位動態顯示格式標籤
+                let formatBadge = '';
+                if (score.pdfPath) {
+                    formatBadge = `<span class="badge format-pdf">PDF 譜</span>`;
+                } else if (score.filePaths && score.filePaths.length > 0) {
+                    formatBadge = `<span class="badge format-img">圖片譜 (${score.filePaths.length}P)</span>`;
+                }
+
+                li.innerHTML = `
+                    <div style="font-weight: 500;">${score.title}</div>
+                    <div class="score-meta">${score.composer} / ${score.key}</div>
+                    <div class="badge-container">${formatBadge}</div>
+                `;
+                li.onclick = () => selectScore(score, li);
+                scoreList.appendChild(li);
+            });
+        }
+
+        function selectScore(score, element) {
+            currentActiveScore = score;
+            document.querySelectorAll('#score-list li').forEach(el => el.classList.remove('active'));
+            element.classList.add('active');
+            currentTitle.textContent = `${score.title} (${score.composer})`;
+
+            // 格式分流判定
+            if (score.pdfPath) {
+                currentMode = 'PDF';
+                pdfjsLib.getDocument(score.pdfPath).promise.then(pdfDoc_ => {
+                    pdfDoc = pdfDoc_;
+                    pageNum = 1;
+                    totalPages = pdfDoc.numPages;
+                    renderCurrentPage();
+                }).catch(err => {
+                    alert("PDF 檔案加載失敗，請檢查路徑是否有誤。");
+                });
+            } else if (score.filePaths && score.filePaths.length > 0) {
+                currentMode = 'IMG';
+                imgArray = score.filePaths;
+                pageNum = 1;
+                totalPages = imgArray.length;
+                renderCurrentPage();
+            }
+
+            // 處理影片
+            if (score.videos && score.videos.length > 0) {
+                videoContainer.style.display = 'block';
+                renderVersionButtons(score.videos);
+                switchVideo(score.videos[0].youtubeId, 0);
+            } else {
+                youtubePlayer.src = '';
+                videoContainer.style.display = 'none';
+            }
+        }
+
+        function renderVersionButtons(videos) {
+            versionSelector.innerHTML = '';
+            videos.forEach((video, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'version-btn';
+                btn.textContent = video.versionTitle;
+                btn.onclick = () => switchVideo(video.youtubeId, index);
+                versionSelector.appendChild(btn);
+            });
+        }
+
+        function switchVideo(youtubeId, activeIndex) {
+            youtubePlayer.src = `https://www.youtube.com/embed/${youtubeId}`;
+            const buttons = versionSelector.getElementsByClassName('version-btn');
+            for (let i = 0; i < buttons.length; i++) {
+                buttons[i].classList.toggle('active', i === activeIndex);
+            }
+        }
+
+        // 藍牙踏板 / 鍵盤監聽
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight' || e.key === ' ') nextPage();
+            if (e.key === 'ArrowLeft') prevPage();
+        });
+
+        window.addEventListener('resize', () => {
+            if (currentMode === 'PDF' && pdfDoc) queueRenderPage(pageNum);
+        });
+
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            const filtered = scoreData.filter(score => {
+                return score.title.toLowerCase().includes(query) || score.composer.toLowerCase().includes(query);
+            });
+            renderList(filtered);
+        });
+
+        renderList(scoreData);
+    </script>
+</body>
+</html>
