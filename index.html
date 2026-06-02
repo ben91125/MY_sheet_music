@@ -2,15 +2,17 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>我的多樂器數位樂譜架 (PDF & 圖片雙支援)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
         :root {
-            --bg-color: #f8f9fa;
+            --bg-color: #1a1a1a; /* 改為護眼深色底，降低長時間看 3C 的眼壓 */
+            --sidebar-bg: #ffffff;
             --text-color: #212529;
             --primary-color: #4a6fa5;
             --sidebar-width: 320px;
+            --video-width: 420px;
         }
 
         body {
@@ -22,18 +24,21 @@
             background-color: var(--bg-color);
             color: var(--text-color);
             overflow: hidden;
+            /* 避免 iPad 上不小心手勢縮放影響排版 */
+            touch-action: manipulation; 
         }
 
         /* 左側側邊欄 */
         #sidebar {
             width: var(--sidebar-width);
-            background: #ffffff;
+            background: var(--sidebar-bg);
             border-right: 1px solid #dee2e6;
             display: flex;
             flex-direction: column;
             box-shadow: 2px 0 5px rgba(0,0,0,0.05);
             flex-shrink: 0;
-            transition: width 0.3s ease;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s ease;
+            z-index: 20;
         }
 
         .sidebar-header {
@@ -49,10 +54,11 @@
 
         #search-input {
             width: 100%;
-            padding: 8px;
+            padding: 10px; /* 稍微放大方便 iPad 手指操作 */
             box-sizing: border-box;
             border: 1px solid #ced4da;
             border-radius: 4px;
+            font-size: 1rem;
         }
 
         #score-list {
@@ -61,10 +67,11 @@
             margin: 0;
             overflow-y: auto;
             flex-grow: 1;
+            -webkit-overflow-scrolling: touch; /* 優化 iOS 滾動流暢度 */
         }
 
         #score-list li {
-            padding: 15px 20px;
+            padding: 18px 20px; /* 增大點擊熱區 */
             border-bottom: 1px solid #f1f3f5;
             cursor: pointer;
             transition: background 0.2s;
@@ -77,7 +84,7 @@
         }
 
         .score-meta {
-            font-size: 0.8rem;
+            font-size: 0.85rem;
             color: #6c757d;
             margin-top: 4px;
         }
@@ -92,7 +99,7 @@
         .badge {
             display: inline-block;
             padding: 2px 6px;
-            font-size: 0.7rem;
+            font-size: 0.75rem;
             background-color: #e7f5ff;
             color: #1c7ed6;
             border-radius: 3px;
@@ -107,54 +114,65 @@
             display: flex;
             flex-direction: column;
             height: 100%;
+            position: relative;
         }
 
         #toolbar {
-            padding: 10px 20px;
+            padding: 12px 20px;
             background: #ffffff;
             border-bottom: 1px solid #dee2e6;
             display: flex;
             align-items: center;
             gap: 15px;
             flex-shrink: 0;
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
+            z-index: 15;
         }
 
         .btn {
-            padding: 6px 12px;
+            padding: 8px 16px;
             background: var(--primary-color);
             color: white;
             border: none;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 0.9rem;
+            font-size: 0.95rem;
+            min-height: 40px; /* 符合平板點擊熱區規範 */
         }
         .btn-focus { background: #2b8a3e; }
+        
+        /* 新增：選單切換按鈕 (平板直式專用) */
+        #menu-toggle-btn {
+            display: none;
+            background: #495057;
+        }
 
         /* 工作區佈局 */
         #workspace {
             display: flex;
             flex-grow: 1;
             overflow: hidden;
-            background: #e9ecef;
+            background: #121212;
         }
 
         #viewer-container {
             flex-grow: 1;
-            overflow: hidden;
+            overflow: auto; /* 允許大圖滾動查看細節 */
             position: relative;
             display: flex;
             justify-content: center;
             align-items: center;
-            background: #1a1a1a; /* 預設護眼黑背景 */
+            background: #1a1a1a; 
+            -webkit-overflow-scrolling: touch;
         }
 
         #pdf-canvas, #img-viewer {
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
             background: white;
             max-width: 100%;
             max-height: 100%;
             display: none;
+            object-fit: contain;
         }
 
         /* 點擊翻頁熱區 */
@@ -162,7 +180,7 @@
             position: absolute;
             top: 0;
             height: 100%;
-            width: 30%;
+            width: 25%; /* 縮小熱區，避免跟中間點擊誤觸 */
             cursor: pointer;
             z-index: 10;
         }
@@ -171,21 +189,22 @@
 
         #page-num-indicator {
             position: absolute;
-            bottom: 15px;
+            bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0,0,0,0.6);
+            background: rgba(0,0,0,0.75);
             color: white;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 0.85rem;
+            padding: 6px 16px;
+            border-radius: 15px;
+            font-size: 0.9rem;
             z-index: 11;
             pointer-events: none;
+            letter-spacing: 1px;
         }
 
         /* YouTube 側邊欄 */
         #video-container {
-            width: 420px;
+            width: var(--video-width);
             background: #212529;
             border-left: 1px solid #343a40;
             display: none;
@@ -194,30 +213,90 @@
             box-sizing: border-box;
             color: white;
             transition: width 0.3s ease;
+            z-index: 14;
         }
 
-        .video-title { margin-bottom: 12px; font-size: 0.95rem; font-weight: bold; }
-        #version-selector { display: flex; gap: 5px; margin-bottom: 12px; flex-wrap: wrap; }
+        .video-title { margin-bottom: 12px; font-size: 0.95rem; font-weight: bold; color: #f8f9fa; }
+        #version-selector { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
 
         .version-btn {
             background: #495057; color: #dee2e6; border: none;
-            padding: 5px 10px; font-size: 0.8rem; border-radius: 3px; cursor: pointer;
+            padding: 6px 12px; font-size: 0.85rem; border-radius: 4px; cursor: pointer;
         }
         .version-btn.active { background: #22b8cf; color: white; font-weight: bold; }
 
         .video-wrapper {
             position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;
             background: #000; border-radius: 4px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         }
         .video-wrapper iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
 
-        /* 專注模式樣式 */
-        body.focus-mode #sidebar { width: 0 !important; overflow: hidden; border: none; }
-        body.focus-mode #video-container { width: 0 !important; padding: 0 !important; overflow: hidden; border: none; }
+        /* 側邊欄遮罩 (行動端/平板彈出時用) */
+        #sidebar-overlay {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 19;
+        }
+
+        /* ────────────────────────────────────────────────────────
+           📱 核心 RWD 媒體查詢：針對 iPad Pro 直式與中小型螢幕 (<= 1024px)
+           ──────────────────────────────────────────────────────── */
+        @media (max-width: 1024px) {
+            #menu-toggle-btn {
+                display: block; /* 顯示選單按鈕 */
+            }
+
+            /* 側邊欄改為絕對定位抽屜式 */
+            #sidebar {
+                position: absolute;
+                left: 0; top: 0; bottom: 0;
+                transform: translateX(-100%);
+                box-shadow: 5px 0 15px rgba(0,0,0,0.3);
+            }
+
+            #sidebar.open {
+                transform: translateX(0);
+            }
+
+            /* 工作區重新佈局：改為上下排列，將空間100%留給樂譜 */
+            #workspace {
+                flex-direction: column;
+            }
+
+            /* 調整直式狀態下的樂譜渲染表現，讓樂譜盡量放大 */
+            #pdf-canvas, #img-viewer {
+                width: 100% !important;
+                height: auto !important;
+                max-height: none !important; /* 允許直式滾動看更多譜，或者符合高度 */
+            }
+
+            /* YouTube 區塊改到下方，並調整寬度為滿版 */
+            #video-container {
+                width: 100% !important;
+                border-left: none;
+                border-top: 1px solid #343a40;
+                padding: 12px;
+            }
+
+            .video-wrapper {
+                max-width: 560px; /* 避免影片在寬螢幕直式下過度放大 */
+                margin: 0 auto;
+            }
+        }
+
+        /* 專注模式樣式 (全螢幕乾淨練琴) */
+        body.focus-mode #sidebar { transform: translateX(-100%) !important; width: 0 !important; overflow: hidden; border: none; }
+        body.focus-mode #video-container { display: none !important; height: 0 !important; padding: 0 !important; overflow: hidden; border: none; }
         body.focus-mode #toolbar { height: 0; padding: 0; overflow: hidden; border: none; }
+        body.focus-mode #sidebar-overlay { display: none !important; }
     </style>
 </head>
 <body>
+
+    <div id="sidebar-overlay" onclick="toggleSidebar(false)"></div>
 
     <div id="sidebar">
         <div class="sidebar-header">
@@ -229,10 +308,11 @@
 
     <div id="main-content">
         <div id="toolbar">
+            <button id="menu-toggle-btn" class="btn" onclick="toggleSidebar(true)">☰ 樂譜庫</button>
             <button class="btn btn-focus" onclick="toggleFocusMode()">切換專注模式</button>
             <button class="btn" onclick="prevPage()">上一頁</button>
             <button class="btn" onclick="nextPage()">下一頁</button>
-            <span id="current-title" style="font-weight: bold; margin-left: auto;">請選擇琴譜</span>
+            <span id="current-title" style="font-weight: bold; margin-left: auto; color: #495057;">請選擇琴譜</span>
         </div>
 
         <div id="workspace">
@@ -240,7 +320,7 @@
                 <div id="prev-zone" class="page-ctrl-zone" onclick="prevPage(); event.stopPropagation();"></div>
                 <div id="next-zone" class="page-ctrl-zone" onclick="nextPage(); event.stopPropagation();"></div>
                 
-                <div style="position:absolute; width:40%; height:100%; z-index:5; cursor:pointer;" onclick="toggleFocusMode()"></div>
+                <div style="position:absolute; width:50%; height:100%; z-index:5; cursor:pointer;" onclick="toggleFocusMode()"></div>
 
                 <canvas id="pdf-canvas"></canvas>
                 <img id="img-viewer" alt="琴譜圖片">
@@ -285,6 +365,19 @@
         const versionSelector = document.getElementById('version-selector');
         const youtubePlayer = document.getElementById('youtube-player');
         const pageIndicator = document.getElementById('page-num-indicator');
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebar-overlay');
+
+        // 新增：控制平板側邊欄抽屜開關
+        function toggleSidebar(show) {
+            if (show) {
+                sidebar.classList.add('open');
+                overlay.style.display = 'block';
+            } else {
+                sidebar.classList.remove('open');
+                overlay.style.display = 'none';
+            }
+        }
 
         function renderCurrentPage() {
             if (currentMode === 'PDF') {
@@ -304,7 +397,14 @@
             pdfDoc.getPage(num).then(page => {
                 const container = document.getElementById('viewer-container');
                 const viewportRaw = page.getViewport({ scale: 1 });
-                const perfectScale = Math.min(container.clientWidth / viewportRaw.width, container.clientHeight / viewportRaw.height);
+                
+                // RWD 核心計算：如果在直式 iPad 下，優先以寬度填滿為原則
+                let perfectScale;
+                if (window.innerWidth <= 1024) {
+                    perfectScale = container.clientWidth / viewportRaw.width;
+                } else {
+                    perfectScale = Math.min(container.clientWidth / viewportRaw.width, container.clientHeight / viewportRaw.height);
+                }
 
                 const viewport = page.getViewport({ scale: perfectScale });
                 canvas.height = viewport.height;
@@ -348,6 +448,8 @@
         function toggleFocusMode() {
             if (!currentActiveScore) return;
             document.body.classList.toggle('focus-mode');
+            // 關閉側邊欄遮罩
+            toggleSidebar(false);
             setTimeout(() => { if (currentMode === 'PDF' && pdfDoc) renderPDFPage(pageNum); }, 310);
         }
 
@@ -368,12 +470,14 @@
                     <div class="score-meta">${score.composer} / ${score.key}</div>
                     <div class="badge-container">${formatBadge}</div>
                 `;
-                li.onclick = () => selectScore(score, li);
+                li.onclick = () => {
+                    selectScore(score, li);
+                    toggleSidebar(false); // 點選樂譜後自動收回抽屜 (平板體驗優化)
+                };
                 scoreList.appendChild(li);
             });
         }
 
-        // ✨ 這裡修正了：最佳化本地端加載 PDF 的相容性參數與錯誤補捉
         function selectScore(score, element) {
             currentActiveScore = score;
             document.querySelectorAll('#score-list li').forEach(el => el.classList.remove('active'));
@@ -382,8 +486,6 @@
 
             if (score.pdfPath) {
                 currentMode = 'PDF';
-                
-                // 改為物件傳參，加入本機讀取優化參數
                 const loadingTask = pdfjsLib.getDocument({
                     url: score.pdfPath,
                     disableAutoFetch: true,
@@ -419,6 +521,9 @@
                 youtubePlayer.src = '';
                 videoContainer.style.display = 'none';
             }
+            
+            // 針對 iPad 重新繪製尺寸
+            setTimeout(() => { if (currentMode === 'PDF' && pdfDoc) renderPDFPage(pageNum); }, 100);
         }
 
         function renderVersionButtons(videos) {
@@ -445,6 +550,7 @@
             if (e.key === 'ArrowLeft') prevPage();
         });
 
+        // 監聽橫直式切換與縮放
         window.addEventListener('resize', () => {
             if (currentMode === 'PDF' && pdfDoc) queueRenderPage(pageNum);
         });
