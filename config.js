@@ -17,7 +17,20 @@ window.scoreData = [
             "scores/愛情怎麼喊停p7.png"
         ],
         videos: [
-            { versionTitle: "半音階口琴版", youtubeId: "3tmd-ClpJxA" }
+            { versionTitle: "半音階口琴版", youtubeId: "3tmd-ClpJxA" },
+			{ versionTitle: "TEST", youtubeId: "3tmd-ClpJxA" }
+        ]
+    },
+	
+	{
+        id: 1,
+        title: "魔法公主",
+        composer: "TEST",
+        key: "Eb Major",
+        pdfPath: "scores/魔法公主.pdf",
+        videos: [
+            { versionTitle: "半音階口琴版", youtubeId: "3tmd-ClpJxA" },
+			{ versionTitle: "TEST", youtubeId: "3tmd-ClpJxA" }
         ]
     }
     // 這裡可以繼續往下加新琴譜...

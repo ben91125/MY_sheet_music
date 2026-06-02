@@ -149,7 +149,6 @@
             background: #1a1a1a; /* 預設護眼黑背景 */
         }
 
-        /* 畫布與圖片皆採用相同影線與最優自適應比例 */
         #pdf-canvas, #img-viewer {
             box-shadow: 0 4px 15px rgba(0,0,0,0.3);
             background: white;
@@ -266,8 +265,7 @@
 
         const scoreData = window.scoreData || [];
         
-        // 核心狀態管理
-        let currentMode = null; // 'PDF' 或 'IMG'
+        let currentMode = null; 
         let pdfDoc = null;
         let imgArray = [];
         let pageNum = 1;
@@ -288,7 +286,6 @@
         const youtubePlayer = document.getElementById('youtube-player');
         const pageIndicator = document.getElementById('page-num-indicator');
 
-        // 1. 核心分配：根據目前模式渲染畫面
         function renderCurrentPage() {
             if (currentMode === 'PDF') {
                 canvas.style.display = 'block';
@@ -302,7 +299,6 @@
             pageIndicator.textContent = `${pageNum} / ${totalPages}`;
         }
 
-        // PDF 渲染邏輯
         function renderPDFPage(num) {
             pageRendering = true;
             pdfDoc.getPage(num).then(page => {
@@ -325,13 +321,10 @@
             });
         }
 
-        // 圖片渲染邏輯
         function renderIMGPage(num) {
-            // 陣列索引從 0 開始，所以要減 1
             imgViewer.src = imgArray[num - 1];
         }
 
-        // 翻頁排程
         function queueRenderPage(num) {
             if (currentMode === 'PDF' && pageRendering) {
                 pageNumPending = num;
@@ -355,17 +348,14 @@
         function toggleFocusMode() {
             if (!currentActiveScore) return;
             document.body.classList.toggle('focus-mode');
-            // 動態重新計算 PDF 尺寸以利完美填滿
             setTimeout(() => { if (currentMode === 'PDF' && pdfDoc) renderPDFPage(pageNum); }, 310);
         }
 
-        // 2. 樂譜列表與格式識別
         function renderList(data) {
             scoreList.innerHTML = '';
             data.forEach(score => {
                 const li = document.createElement('li');
                 
-                // 根據設定欄位動態顯示格式標籤
                 let formatBadge = '';
                 if (score.pdfPath) {
                     formatBadge = `<span class="badge format-pdf">PDF 譜</span>`;
@@ -383,22 +373,35 @@
             });
         }
 
+        // ✨ 這裡修正了：最佳化本地端加載 PDF 的相容性參數與錯誤補捉
         function selectScore(score, element) {
             currentActiveScore = score;
             document.querySelectorAll('#score-list li').forEach(el => el.classList.remove('active'));
             element.classList.add('active');
             currentTitle.textContent = `${score.title} (${score.composer})`;
 
-            // 格式分流判定
             if (score.pdfPath) {
                 currentMode = 'PDF';
-                pdfjsLib.getDocument(score.pdfPath).promise.then(pdfDoc_ => {
+                
+                // 改為物件傳參，加入本機讀取優化參數
+                const loadingTask = pdfjsLib.getDocument({
+                    url: score.pdfPath,
+                    disableAutoFetch: true,
+                    disableStream: true
+                });
+
+                loadingTask.promise.then(pdfDoc_ => {
                     pdfDoc = pdfDoc_;
                     pageNum = 1;
                     totalPages = pdfDoc.numPages;
                     renderCurrentPage();
                 }).catch(err => {
-                    alert("PDF 檔案加載失敗，請檢查路徑是否有誤。");
+                    console.error("PDF 載入詳細錯誤:", err);
+                    if (window.location.protocol === 'file:') {
+                        alert("【PDF 載入失敗】\n偵測到您直接雙擊 HTML 檔開啟。\n這通常是瀏覽器的本機跨域安全限制（CORS）引起的。\n\n💡 建議解決方案：\n1. 請確認 config.js 中的檔名『絕對不能包含空白鍵』（例如改為 Mononoke_RuPiano.pdf）\n2. 建議使用 iPad 的 Safari 瀏覽器打開，Safari 對本機檔案的限制較寬鬆。");
+                    } else {
+                        alert("PDF 檔案加載失敗，請檢查 scores/ 資料夾中是否存在該檔案。");
+                    }
                 });
             } else if (score.filePaths && score.filePaths.length > 0) {
                 currentMode = 'IMG';
@@ -408,7 +411,6 @@
                 renderCurrentPage();
             }
 
-            // 處理影片
             if (score.videos && score.videos.length > 0) {
                 videoContainer.style.display = 'block';
                 renderVersionButtons(score.videos);
@@ -438,7 +440,6 @@
             }
         }
 
-        // 藍牙踏板 / 鍵盤監聽
         window.addEventListener('keydown', (e) => {
             if (e.key === 'ArrowRight' || e.key === ' ') nextPage();
             if (e.key === 'ArrowLeft') prevPage();
