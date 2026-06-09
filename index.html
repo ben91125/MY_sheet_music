@@ -217,6 +217,35 @@
         }
 
         .video-title { margin-bottom: 12px; font-size: 0.95rem; font-weight: bold; color: #f8f9fa; }
+        #practice-info {
+            margin-bottom: 18px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid #343a40;
+        }
+        .practice-title {
+            margin-bottom: 10px;
+            font-size: 0.95rem;
+            font-weight: bold;
+            color: #f8f9fa;
+        }
+        .practice-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 6px 10px;
+            margin-bottom: 12px;
+            font-size: 0.85rem;
+            line-height: 1.45;
+        }
+        .practice-label { color: #adb5bd; white-space: nowrap; }
+        .practice-value { color: #f1f3f5; }
+        .practice-notes {
+            margin: 0;
+            padding-left: 18px;
+            color: #dee2e6;
+            font-size: 0.85rem;
+            line-height: 1.55;
+        }
+        .practice-notes li { margin-bottom: 6px; }
         #version-selector { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
 
         .version-btn {
@@ -329,9 +358,10 @@
             </div>
 
             <div id="video-container">
-                <div class="video-title">🎬 練習錄影版本</div>
+                <div id="practice-info"></div>
+                <div id="video-section-title" class="video-title">🎬 練習錄影版本</div>
                 <div id="version-selector"></div>
-                <div class="video-wrapper">
+                <div id="video-wrapper" class="video-wrapper">
                     <iframe id="youtube-player" src="" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
                 </div>
             </div>
@@ -363,6 +393,9 @@
         
         const videoContainer = document.getElementById('video-container');
         const versionSelector = document.getElementById('version-selector');
+        const practiceInfo = document.getElementById('practice-info');
+        const videoSectionTitle = document.getElementById('video-section-title');
+        const videoWrapper = document.getElementById('video-wrapper');
         const youtubePlayer = document.getElementById('youtube-player');
         const pageIndicator = document.getElementById('page-num-indicator');
         const sidebar = document.getElementById('sidebar');
@@ -453,6 +486,60 @@
             setTimeout(() => { if (currentMode === 'PDF' && pdfDoc) renderPDFPage(pageNum); }, 310);
         }
 
+        function escapeHTML(value) {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function getScoreSubtitle(score) {
+            return [score.artist, score.composer, score.key].filter(Boolean).join(' / ');
+        }
+
+        function getPracticeFields(score) {
+            return [
+                ['演唱', score.artist],
+                ['作曲', score.composer],
+                ['作詞', score.lyricist],
+                ['編曲/製譜', score.arranger],
+                ['調性', score.key],
+                ['拍號', score.timeSignature],
+                ['速度', score.tempo ? `♩ = ${score.tempo}` : ''],
+                ['出處', score.source]
+            ].filter(([, value]) => value);
+        }
+
+        function renderPracticeInfo(score) {
+            const fields = getPracticeFields(score);
+            const notes = score.practiceNotes || [];
+
+            if (fields.length === 0 && notes.length === 0) {
+                practiceInfo.innerHTML = '';
+                return false;
+            }
+
+            const fieldHTML = fields.length
+                ? `<div class="practice-grid">${fields.map(([label, value]) => `
+                    <div class="practice-label">${escapeHTML(label)}</div>
+                    <div class="practice-value">${escapeHTML(value)}</div>
+                `).join('')}</div>`
+                : '';
+
+            const notesHTML = notes.length
+                ? `<ul class="practice-notes">${notes.map(note => `<li>${escapeHTML(note)}</li>`).join('')}</ul>`
+                : '';
+
+            practiceInfo.innerHTML = `
+                <div class="practice-title">練習資訊</div>
+                ${fieldHTML}
+                ${notesHTML}
+            `;
+            return true;
+        }
+
         function renderList(data) {
             scoreList.innerHTML = '';
             data.forEach(score => {
@@ -466,8 +553,8 @@
                 }
 
                 li.innerHTML = `
-                    <div style="font-weight: 500;">${score.title}</div>
-                    <div class="score-meta">${score.composer} / ${score.key}</div>
+                    <div style="font-weight: 500;">${escapeHTML(score.title)}</div>
+                    <div class="score-meta">${escapeHTML(getScoreSubtitle(score))}</div>
                     <div class="badge-container">${formatBadge}</div>
                 `;
                 li.onclick = () => {
@@ -482,7 +569,9 @@
             currentActiveScore = score;
             document.querySelectorAll('#score-list li').forEach(el => el.classList.remove('active'));
             element.classList.add('active');
-            currentTitle.textContent = `${score.title} (${score.composer})`;
+            currentTitle.textContent = getScoreSubtitle(score)
+                ? `${score.title} (${getScoreSubtitle(score)})`
+                : score.title;
 
             if (score.pdfPath) {
                 currentMode = 'PDF';
@@ -513,13 +602,23 @@
                 renderCurrentPage();
             }
 
-            if (score.videos && score.videos.length > 0) {
+            const hasPracticeInfo = renderPracticeInfo(score);
+            const hasVideos = score.videos && score.videos.length > 0;
+
+            if (hasVideos) {
                 videoContainer.style.display = 'block';
+                videoSectionTitle.style.display = 'block';
+                versionSelector.style.display = 'flex';
+                videoWrapper.style.display = 'block';
                 renderVersionButtons(score.videos);
                 switchVideo(score.videos[0].youtubeId, 0);
             } else {
                 youtubePlayer.src = '';
-                videoContainer.style.display = 'none';
+                versionSelector.innerHTML = '';
+                videoSectionTitle.style.display = 'none';
+                versionSelector.style.display = 'none';
+                videoWrapper.style.display = 'none';
+                videoContainer.style.display = hasPracticeInfo ? 'block' : 'none';
             }
             
             // 針對 iPad 重新繪製尺寸
@@ -558,7 +657,14 @@
         searchInput.addEventListener('input', (e) => {
             const query = e.target.value.toLowerCase();
             const filtered = scoreData.filter(score => {
-                return score.title.toLowerCase().includes(query) || score.composer.toLowerCase().includes(query);
+                return [
+                    score.title,
+                    score.artist,
+                    score.composer,
+                    score.lyricist,
+                    score.key,
+                    score.source
+                ].some(value => String(value || '').toLowerCase().includes(query));
             });
             renderList(filtered);
         });
